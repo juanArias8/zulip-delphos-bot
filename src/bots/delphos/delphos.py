@@ -1,44 +1,61 @@
+import shlex
 from typing import Any, Dict
 
-import requests
 from zulip_bots.lib import BotHandler
 
-
-def get_weather(city_name: str):
-    API_KEY = "37bf4285515446549a4222213231001"
-    url = f"https://api.weatherapi.com/v1/current.json?key={API_KEY}&q={city_name}"
-    return requests.get(url).json()
+from src.models.schemas import Command, Instruction
+from src.operators.base import BaseOperator
+from src.operators.help import HelpOperator
+from src.operators.search.links import LinksOperator
+from src.operators.search.messages import MessagesOperator
+from src.utils.constants import ERROR_HELP
 
 
 class DelphosHandler:
-    ERROR_MESSAGE = """
-    Sorry, No command/city found. You need to write the command and city: 
-    '@weather weather <city>' or 'weather <city>' in DM
-    """
-
-    def usage(self) -> str:
+    @staticmethod
+    def usage() -> str:
         return """
-        This is a weather report system,
-        Please specify the city name to obtain detailed info.
-        """
+            Zulip Bot for advanced search
+            """
 
-    def handle_message(self, message: Dict[str, Any], bot_handler: BotHandler) -> None:
-        content = message.get("content", None)
-        response = self.ERROR_MESSAGE
+    def handle_message(self, message: Dict[str, Any], bot_handler: BotHandler):
+        message_type = message.get("type", None)  # private or stream
+        content = message.get("content", None)  # message content
 
-        try:
-            content = content.strip().split()[-2:]
-            command = content[0]
-            city = content[1]
-        except IndexError as e:
-            command = None
-            city = None
+        if not (message_type and content):
+            return [ERROR_HELP]
 
-        if command == "weather" and city:
-            response = get_weather(city)
+        # splits the content ["@Delphos", "messages", "10"]
+        content = shlex.split(content.strip())
+        if len(content) == 0:
+            return [ERROR_HELP]
 
-        bot_handler.send_reply(message, response)
-        return
+        mentions = ["Delphos", "@**Delphos**"]
+        starts_with_mention = content[0] in mentions
+        if message_type == "private" and starts_with_mention:
+            content = content[1:]
+
+        command = Command(instruction=content[0], params=content[1:])
+        if message_type == "stream":
+            command.stream = message.get("display_recipient", None)
+            command.topic = message.get("subject", None)
+
+        instance = self.get_operator_instance(command)
+        response = instance.get_response(command)
+
+        for item in response:
+            bot_handler.send_reply(message, item)
+
+    @staticmethod
+    def get_operator_instance(command: Command) -> BaseOperator:
+        instructions = Instruction
+        available_operators = {
+            instructions.HELP: HelpOperator,
+            instructions.MESSAGES: MessagesOperator,
+            instructions.LINKS: LinksOperator,
+        }
+        operator_class = available_operators.get(command.instruction)
+        return HelpOperator() if operator_class is None else operator_class()
 
 
 handler_class = DelphosHandler

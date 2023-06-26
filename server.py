@@ -263,4 +263,4 @@ def initialize_data():
 
 if __name__ == "__main__":
     options = parse_args()
-    uvicorn.run("server:app", host=options.hostname, port=int(options.port))
+    uvicorn.run("server:app", host=options.hostname, port=int(options.port), reload=True)

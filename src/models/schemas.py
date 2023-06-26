@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import List, Any, Union
 
 from pydantic import BaseModel
@@ -36,3 +37,27 @@ class ZulipEvent(BaseModel):
     trigger: str
     token: str
     bot_full_name: str
+
+
+class Instruction(str, Enum):
+    HELP = "help"
+    MESSAGES = "messages"
+    LINKS = "links"
+
+
+class Command(BaseModel):
+    instruction: Instruction
+    params: List[str] = []
+    stream: str = None
+    topic: str = None
+
+
+class ZulipResponse(BaseModel):
+    result: str
+    msg: str
+    found_anchor: bool = None
+    found_oldest: bool = None
+    found_newest: bool = None
+    history_limited: bool = None
+    anchor: int = None
+    messages: List[Message] = None
